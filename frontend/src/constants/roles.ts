@@ -13,9 +13,24 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     'schema:read',
     'schema:write',
     'audit:read',
+    'publish_queue:read',
+    'publish_queue:write',
+    'publish_queue:admin',
   ],
-  engineer: ['streams:read', 'events:read', 'runs:read', 'runs:trigger', 'rejected:read', 'rejected:replay', 'schema:read', 'schema:write', 'audit:read'],
-  viewer: ['streams:read', 'events:read', 'runs:read', 'rejected:read', 'schema:read'],
+  engineer: [
+    'streams:read',
+    'events:read',
+    'runs:read',
+    'runs:trigger',
+    'rejected:read',
+    'rejected:replay',
+    'schema:read',
+    'schema:write',
+    'audit:read',
+    'publish_queue:read',
+    'publish_queue:write',
+  ],
+  viewer: ['streams:read', 'events:read', 'runs:read', 'rejected:read', 'schema:read', 'publish_queue:read'],
 };
 
 export const can = (role: Role | undefined, permission: Permission): boolean => {

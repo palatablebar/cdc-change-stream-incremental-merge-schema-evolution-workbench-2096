@@ -924,3 +924,29 @@ td.num,
 ::-webkit-scrollbar-track {
   background: transparent;
 }
+
+/* ================= 跨流发布队列 ================= */
+.pq-progress {
+  position: relative;
+  height: 22px;
+  border: 1px solid var(--color-line);
+  background: var(--color-sunken);
+  overflow: hidden;
+}
+
+.pq-progress-fill {
+  height: 100%;
+  background: color-mix(in oklch, var(--color-ok) 55%, var(--color-amber-soft));
+  transition: width 240ms var(--ease-out);
+}
+
+.pq-progress-text {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding-right: 8px;
+  font-size: 11px;
+  color: var(--color-ink);
+}

@@ -10,7 +10,10 @@ export type Permission =
   | 'rejected:replay'
   | 'schema:read'
   | 'schema:write'
-  | 'audit:read';
+  | 'audit:read'
+  | 'publish_queue:read'
+  | 'publish_queue:write'
+  | 'publish_queue:admin';
 
 export interface User {
   id: string;

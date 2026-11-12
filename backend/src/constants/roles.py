@@ -21,6 +21,10 @@ PERMISSIONS: dict[str, tuple[str, ...]] = {
     "schema:write": (ROLE_ADMIN, ROLE_ENGINEER),
     "audit:read": ALL_ROLES,
     "users:admin": (ROLE_ADMIN,),
+    # 跨流发布队列：看板全员可读；泵控/注入/重置/演示推进为写操作
+    "publish_queue:read": ALL_ROLES,
+    "publish_queue:write": (ROLE_ADMIN, ROLE_ENGINEER),
+    "publish_queue:admin": (ROLE_ADMIN,),
 }
 
 

@@ -24,10 +24,15 @@ celery_app.autodiscover_tasks(["worker_src.tasks"], force=True)
 
 import worker_src.tasks.heartbeat_task  # noqa: E402,F401 - 注册 beat 任务
 import worker_src.tasks.merge_task  # noqa: E402,F401 - 注册归并任务
+import worker_src.tasks.publish_queue_task  # noqa: E402,F401 - 注册跨流发布队列 pump
 
 celery_app.conf.beat_schedule = {
     "worker-heartbeat": {
         "task": "cdcmerge.worker_heartbeat",
         "schedule": 20.0,
-    }
+    },
+    "publish-queue-pump": {
+        "task": "cdcmerge.publish_queue_pump",
+        "schedule": 5.0,
+    },
 }

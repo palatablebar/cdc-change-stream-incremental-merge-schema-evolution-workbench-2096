@@ -5,6 +5,18 @@ from src.models.cdc_event import CdcEvent
 from src.models.change_stream import ChangeStream
 from src.models.merge_run import MergeRun
 from src.models.merge_target import MergeTarget
+from src.models.publish_queue import (
+    PqAuditEvent,
+    PqCheckpoint,
+    PqCustomer,
+    PqCustomerInbox,
+    PqLease,
+    PqOrder,
+    PqOrderInbox,
+    PqOutbox,
+    PqPumpRun,
+    PqRuntime,
+)
 from src.models.rejected_event import RejectedEvent
 from src.models.schema_version import SchemaVersion
 from src.models.user import User
@@ -16,6 +28,16 @@ __all__ = [
     "ChangeStream",
     "MergeRun",
     "MergeTarget",
+    "PqAuditEvent",
+    "PqCheckpoint",
+    "PqCustomer",
+    "PqCustomerInbox",
+    "PqLease",
+    "PqOrder",
+    "PqOrderInbox",
+    "PqOutbox",
+    "PqPumpRun",
+    "PqRuntime",
     "RejectedEvent",
     "SchemaVersion",
     "User",

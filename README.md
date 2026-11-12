@@ -55,6 +55,30 @@
 - 输出：逐条 `compat`、汇总 `compat_level`、受影响列、前滚 SQL（含 `ADD COLUMN ... DEFAULT`、`ALTER COLUMN ... TYPE ... USING`）、预检 SQL、回滚 SQL、发布步骤。
 - demo 数据：orders 流 `v1 → v2` = `amount numeric(14,2) → numeric(12,2)`（type_narrow / **breaking**）+ 新增 `channel text`（add_nullable / **backward**），即 1 条 breaking + 1 条 backward。
 
+### 算法 3：跨流发布队列（乱序到达的依赖暂存 + 可恢复 pump）
+
+结账时订单事件常比客户资料先到几秒。该队列把两条变更流接进同一套可恢复状态机，
+实现位于 `backend/src/services/pq_engine.py`（状态机/pump）、`pq_service.py`（存取/演示数据）、
+`worker/src/tasks/publish_queue_task.py`（beat 周期 pump）。
+
+- **两张 append-only inbox**：`pq_customer_inbox`（客户 upsert/delete）、`pq_order_inbox`（订单 upsert），
+  `event_uid` 唯一构成第一层去重。
+- **逐条事务 + 检查点**：每条 inbox 事件一个事务，`pq_checkpoints.last_seq` 与业务状态同事务提交。
+  处理事件 N 时崩溃 → 整体回滚、位点停在 N-1，下次 pump 从 N 续跑；配合幂等处理对外呈现「恰好一次发布」。
+- **状态机（`pq_orders.status`）**：
+  - 订单先到、客户缺失 → `waiting` 暂存，计入「仍缺依赖」；
+  - 客户 upsert 到齐 → 同一事务内回补放行全部 waiting 订单（`order.released`，path=`customer_arrived_backfill`）；
+  - 订单到达且客户有效 → 直接放行；
+  - 客户 delete（注销）→ 关联 waiting 订单转 `blocked` 终态，之后同客户任何订单（含重复投递）一律阻断、绝不放行；
+  - 同 `order_id` 重复投递 → 不新增发布，只累加 `delivery_count` 并记审计。
+- **双层幂等**：inbox 的 `event_uid` 唯一 + outbox `pq_outbox.order_id` 唯一（SAVEPOINT 吸收冲突），
+  重复投递最多产生一行发布。
+- **租约**：`pq_lease` 单行租约（`with_for_update` 行锁 + 2 分钟僵死接管），手动触发与 beat pump 互不踩踏。
+- **故障注入演示**：`POST /api/publish-queue/crash-injection` 在指定订单事件上注入崩溃，
+  验证回滚、失败留痕（`pq_pump_runs`）、清除注入后从原处续跑。
+- **页面**：「跨流发布队列」展示两条流进度（已处理/总量/积压/检查点）、暂存/放行/阻断计数、
+  仍缺依赖客户、订单台账、pump 运行记录与状态迁移审计时间线，3 秒自动刷新。
+
 ## 4. 快速启动
 
 ```bash
@@ -119,7 +143,7 @@ gb-547/
 │   ├── src/{config,constants,models,schemas,middlewares,utils,services,controllers,routes,migrations}
 │   └── Dockerfile / entrypoint.sh / alembic.ini / requirements.txt
 ├── worker/
-│   ├── src/{config,tasks,core}      # merge_task / heartbeat_task
+│   ├── src/{config,tasks,core}      # merge_task / publish_queue_task / heartbeat_task
 │   └── Dockerfile / healthcheck.sh
 └── frontend/
     ├── src/{api,stores,types,components,hooks,pages,router,utils,constants,styles}
@@ -150,6 +174,7 @@ gb-547/
 | ChangeKind（10 类） | `backend/src/constants/enums.py` | `frontend/src/constants/cdc.ts`、`frontend/src/constants/cdc.ts#CHANGE_KIND_TONE` |
 | CompatLevel (`full/backward/forward/breaking`) | `backend/src/constants/enums.py` | `frontend/src/constants/cdc.ts` |
 | MergeStrategy (`upsert/append`) | `backend/src/constants/enums.py` | `frontend/src/constants/cdc.ts` |
+| 发布队列订单状态 (`waiting/published/blocked`)、流键、审计动作 | `backend/src/constants/pq_enums.py` | `frontend/src/types/publishQueue.ts`、`frontend/src/constants/roles.ts`（权限） |
 
 ## 10. Docker 说明
 
@@ -163,6 +188,10 @@ gb-547/
 - 目标表 `dw.orders_dw` / `dw.customers_dw` 只建了 DDL，归并结果以 `merge_runs.result_json` 的落账行形式持久化，**没有真写 dw 表**（本 demo 的重点是算法与判定，不是物理写入）。
 - `delete` 事件在 seed 数据中为 0 条（演示窗口内全为 insert/update），算法的 tombstone/rebuild 分支有单测级代码但未被 demo 数据触发。
 - 事件来源是数据库表，不是真的 Kafka 消费者。
+- 跨流发布队列的 outbox（`pq_outbox`）是模拟的仓库发布账本，未对接真实下游；其 `order_id` 唯一约束即最终幂等防线。
+- 发布队列 pump 由 Celery beat 每 5s 触发一次，也可在页面手动触发；故障注入只用于演示可恢复性，生产应保持关闭。
+- 后端测试 `backend/tests/` 用内存 SQLite（ATTACH 出 `cdc` schema）验证状态机与断点续跑，
+  运行：`cd backend && python -m pytest tests/ -q`；PG 专有语法（JSONB / ON CONFLICT / BIGSERIAL）以 DDL 编译校验覆盖。
 
 ## License
 
